@@ -37,8 +37,12 @@ public class DefaultPointService implements PointService {
      * 포인트 충전 정책
      * 1. 한번에 충전 가능한 금액이 정해져있다.
      * 2. 사용자의 최대 잔고만큼만 저장할 수 있다.
+     * 3. 0 이하의 금액을 충전할 수 없다.
      */
     public UserPoint charge(long userId, long amount) {
+        if (amount <= 0) {
+            throw new IllegalArgumentException("0 이하의 금액을 충전할 수 없습니다.");
+        }
         if (amount > ONCE_CHARGE_MAX_POINT) {
             throw new IllegalArgumentException("한번에 충전 가능한 금액을 초과했습니다.");
         }

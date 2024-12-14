@@ -5,6 +5,8 @@ import io.hhplus.tdd.database.UserPointTable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.List;
 
@@ -85,6 +87,17 @@ class DefaultPointServiceTest {
         assertThatThrownBy(() -> sut.charge(userId, amount))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("한번에 충전 가능한 금액을 초과했습니다.");
+    }
+
+    @DisplayName("0 이하의 금액을 충전할 수 없다.")
+    @ParameterizedTest
+    @ValueSource(longs = {0, -1})
+    void chargeFailWhenMinusAmount(long amount) {
+        long userId = 1L;
+
+        assertThatThrownBy(() -> sut.charge(userId, amount))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("0 이하의 금액을 충전할 수 없습니다.");
     }
 
 }
