@@ -39,7 +39,7 @@ public class DefaultPointService implements PointService {
      * 2. 사용자의 최대 잔고만큼만 저장할 수 있다.
      * 3. 0 이하의 금액은 충전할 수 없다.
      */
-    public UserPoint charge(long userId, long amount) {
+    public synchronized UserPoint charge(long userId, long amount) {
         pointValidationService.validateCharge(userId, amount);
 
         UserPoint userPoint = userPointTable.selectById(userId);
@@ -57,7 +57,7 @@ public class DefaultPointService implements PointService {
      * 2. 0 이하의 금액은 사용할 수 없다.
      */
     @Override
-    public UserPoint use(long userId, long amount) {
+    public synchronized UserPoint use(long userId, long amount) {
         pointValidationService.validateUse(userId, amount);
 
         UserPoint userPoint = userPointTable.selectById(userId);
