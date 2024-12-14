@@ -100,4 +100,31 @@ class DefaultPointServiceTest {
                 .hasMessage("0 이하의 금액을 충전할 수 없습니다.");
     }
 
+    @DisplayName("0 이하의 금액을 사용할 수 없다.")
+    @ParameterizedTest
+    @ValueSource(longs = {0, -1})
+    void useFailWhenMinusAmount(long amount) {
+        long userId = 1L;
+
+        assertThatThrownBy(() -> sut.use(userId, amount))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("0 이하의 금액을 사용할 수 없습니다.");
+    }
+
+    @DisplayName("잔액보다 큰 금액을 사용할 수 없다.")
+    @Test
+    void useFailWhenOverAmount() {
+        long userId = 1L;
+        long exisitingAmount = 100L;
+        long useAmount = 101L;
+        UserPoint userPoint = new UserPoint(userId, exisitingAmount, 0);
+
+        when(userPointTable.selectById(anyLong()))
+                .thenReturn(userPoint);
+
+        assertThatThrownBy(() -> sut.use(userId, useAmount))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("잔액이 부족합니다.");
+    }
+
 }

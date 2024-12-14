@@ -8,4 +8,6 @@ public interface PointService {
     List<PointHistory> getPointHistoryByUserId(long userId);
 
     UserPoint charge(long userId, long amount);
+
+    UserPoint use(long userId, long amount);
 }
