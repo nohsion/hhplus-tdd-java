@@ -6,6 +6,9 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+import java.util.List;
+
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.mock;
@@ -24,6 +27,35 @@ class DefaultPointServiceTest {
         userPointTable = mock(UserPointTable.class);
         pointHistoryTable = mock(PointHistoryTable.class);
         sut = new DefaultPointService(userPointTable, pointHistoryTable);
+    }
+
+    @Test
+    void getPointByUserId() {
+        long userId = 1L;
+        UserPoint userPoint = new UserPoint(userId, 1000, 0);
+
+        when(userPointTable.selectById(anyLong()))
+                .thenReturn(userPoint);
+
+        UserPoint result = sut.getPointByUserId(userId);
+
+        assertThat(result).isEqualTo(userPoint);
+    }
+
+    @Test
+    void getPointHistoryByUserId() {
+        long userId = 1L;
+        List<PointHistory> pointHistoryList = List.of(
+                new PointHistory(1, userId, 1000, TransactionType.CHARGE, 0),
+                new PointHistory(2, userId, 1000, TransactionType.USE, 0)
+        );
+
+        when(pointHistoryTable.selectAllByUserId(anyLong()))
+                .thenReturn(pointHistoryList);
+
+        List<PointHistory> result = sut.getPointHistoryByUserId(userId);
+
+        assertThat(result).isEqualTo(pointHistoryList);
     }
 
     @DisplayName("사용자의 최대 잔고를 초과하여 충전할 수 없다.")

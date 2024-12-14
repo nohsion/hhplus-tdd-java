@@ -4,6 +4,8 @@ import io.hhplus.tdd.database.PointHistoryTable;
 import io.hhplus.tdd.database.UserPointTable;
 import org.springframework.stereotype.Service;
 
+import java.util.List;
+
 @Service
 public class DefaultPointService implements PointService {
 
@@ -19,6 +21,16 @@ public class DefaultPointService implements PointService {
     ) {
         this.userPointTable = userPointTable;
         this.pointHistoryTable = pointHistoryTable;
+    }
+
+    @Override
+    public UserPoint getPointByUserId(long userId) {
+        return userPointTable.selectById(userId);
+    }
+
+    @Override
+    public List<PointHistory> getPointHistoryByUserId(long userId) {
+        return pointHistoryTable.selectAllByUserId(userId);
     }
 
     /**

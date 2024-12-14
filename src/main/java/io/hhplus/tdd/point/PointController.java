@@ -18,29 +18,23 @@ public class PointController {
         this.pointService = pointService;
     }
 
-    /**
-     * TODO - 특정 유저의 포인트를 조회하는 기능을 작성해주세요.
-     */
     @GetMapping("{id}")
     public UserPoint point(
-            @PathVariable long id
+            @PathVariable("id") long id
     ) {
-        return new UserPoint(0, 0, 0);
+        return pointService.getPointByUserId(id);
     }
 
-    /**
-     * TODO - 특정 유저의 포인트 충전/이용 내역을 조회하는 기능을 작성해주세요.
-     */
     @GetMapping("{id}/histories")
     public List<PointHistory> history(
-            @PathVariable long id
+            @PathVariable("id") long id
     ) {
-        return List.of();
+        return pointService.getPointHistoryByUserId(id);
     }
 
     @PatchMapping("{id}/charge")
     public UserPoint charge(
-            @PathVariable long id,
+            @PathVariable("id") long id,
             @RequestBody long amount
     ) {
         return pointService.charge(id, amount);
@@ -51,7 +45,7 @@ public class PointController {
      */
     @PatchMapping("{id}/use")
     public UserPoint use(
-            @PathVariable long id,
+            @PathVariable("id") long id,
             @RequestBody long amount
     ) {
         return new UserPoint(0, 0, 0);
