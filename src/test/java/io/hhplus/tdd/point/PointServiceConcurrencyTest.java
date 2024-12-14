@@ -128,6 +128,45 @@ class PointServiceConcurrencyTest {
                 .containsExactlyElementsOf(amounts);
     }
 
+    @DisplayName("동시에 userId3에 포인트 충전과 사용을 번갈아가면서 동일한 금액을 요청하면 요청 순서대로 처리되어 결과가 0이어야 한다.")
+    @Test
+    void chargeAndUseConcurrently_userId3() throws InterruptedException {
+        long userId = 3L;
+        long amount = 100L;
+
+        ExecutorService executorService = Executors.newFixedThreadPool(THREAD_COUNT);
+        CountDownLatch latch = new CountDownLatch(THREAD_COUNT * 2);
+
+        for (int i = 0; i < THREAD_COUNT; i++) {
+            executorService.submit(() -> {
+                try {
+                    pointService.charge(userId, amount);
+                } finally {
+                    latch.countDown();
+                }
+            });
+            Thread.sleep(5); // 충전이 먼저 처리되도록 간격을 둔다.
+            executorService.submit(() -> {
+                try {
+                    pointService.use(userId, amount);
+                } finally {
+                    latch.countDown();
+                }
+            });
+        }
+        latch.await();
+        executorService.shutdown();
+
+        UserPoint userPoint = userPointTable.selectById(userId);
+        assertThat(userPoint.point())
+                .as("동시에 10명이 충전과 사용을 번갈아가면서 요청하면 잔여 포인트는 0이어야 한다.")
+                .isZero();
+
+        List<PointHistory> pointHistoryList = pointHistoryTable.selectAllByUserId(userId);
+        assertThat(pointHistoryList).hasSize(THREAD_COUNT * 2);
+
+    }
+
     @DisplayName("동시에 1000명이 각각 자신의 포인트를 충전하면 본인만의 Lock을 갖기 때문에 별도 대기 없이 처리되어야 한다.")
     @Test
     void chargeConcurrentlyOnlyMyPoint_1000Users() throws InterruptedException {

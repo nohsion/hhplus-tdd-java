@@ -48,10 +48,10 @@ public class DefaultPointService implements PointService {
      */
     public UserPoint charge(long userId, long amount) {
         UserPoint savedUserPoint;
-        log.info("Lock 요청... userId={}, amount={}", userId, amount);
+        log.info("charge Lock 요청... userId={}, amount={}", userId, amount);
         Lock lock = lockByUserId.computeIfAbsent(userId, k -> new ReentrantLock());
         lock.lock();
-        log.info("Lock 획득! userId={}, amount={}", userId, amount);
+        log.info("charge Lock 획득! userId={}, amount={}", userId, amount);
         try {
             // 주의: 조회를 하는 부분까지 Lock을 걸어야 한다.
             // 충전에만 Lock을 걸면 +100을 두 번해도 결과가 +100이 되는 문제가 발생할 수 있다. 조회시점의 데이터가 동일하기 때문이다.
@@ -61,7 +61,7 @@ public class DefaultPointService implements PointService {
             savedUserPoint = userPointTable.insertOrUpdate(userId, amountToSave);
             pointHistoryTable.insert(userId, amount, TransactionType.CHARGE, System.currentTimeMillis());
         } finally {
-            log.info("Lock 해제! userId={}, amount={}", userId, amount);
+            log.info("charge Lock 해제! userId={}, amount={}", userId, amount);
             lock.unlock();
         }
 
@@ -76,10 +76,10 @@ public class DefaultPointService implements PointService {
     @Override
     public UserPoint use(long userId, long amount) {
         UserPoint savedUserPoint;
-        log.info("Lock 요청... userId={}, amount={}", userId, amount);
+        log.info("use Lock 요청... userId={}, amount={}", userId, amount);
         Lock lock = lockByUserId.computeIfAbsent(userId, k -> new ReentrantLock());
         lock.lock();
-        log.info("Lock 획득! userId={}, amount={}", userId, amount);
+        log.info("use Lock 획득! userId={}, amount={}", userId, amount);
         try {
             UserPoint userPoint = userPointTable.selectById(userId);
             long amountToSave = userPoint.minusPoint(amount);
@@ -87,7 +87,7 @@ public class DefaultPointService implements PointService {
             savedUserPoint = userPointTable.insertOrUpdate(userId, amountToSave);
             pointHistoryTable.insert(userId, amount, TransactionType.USE, System.currentTimeMillis());
         } finally {
-            log.info("Lock 해제! userId={}, amount={}", userId, amount);
+            log.info("use Lock 해제! userId={}, amount={}", userId, amount);
             lock.unlock();
         }
 

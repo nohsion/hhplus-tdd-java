@@ -72,11 +72,11 @@ AbstractQueuedSynchronizer(AQS)로 구현되어 있고, ReentrantLock의 fairnes
   - NonFairSync
     - 락이 비어있으면서 내가 가장 먼저 접근했다면 락을 획득합니다.
     - `compareAndSetState(0, 1)`: CAS 알고리즘
-    - ![img.png](img.png)
+    - ![img.png](assets/img.png)
   - FairSync:
     - 대기 스레드가 없고, 락이 비어있으면서 내가 가장 먼저 접근했다면 락을 획득합니다.
     - `!hasQueuedThreads() && compareAndSetState(0, 1)`
-    - ![img_1.png](img_1.png)
+    - ![img_1.png](assets/img_1.png)
 
 
 #### CAS 알고리즘이란?
@@ -87,7 +87,7 @@ Compare And Swap의 약자로, 기존 값과 변경할 값을 compare해서 같�
 - 만약, expect와 state가 다르면 false를 반환하고 다시 시도합니다. (락 획득 실패 & 재시도)
 - 즉, 락을 기다리는게 아닌, 무한루프를 통해 Nonblocking 하게 재시도를 하는 과정입니다.
 - 이때, CAS 연산은 원자성을 보장합니다. (동시에 값을 바꾸려 할 때, 다른 스레드가 중간 과정의 값을 읽어가서 동시성 문제가 발생하지 않도록 하는 것)
-- ![img_2.png](img_2.png)
+- ![img_2.png](assets/img_2.png)
 
 #### 위 연산이 volatile과 관련되어 있는 이유
 - volatile 키워드를 사용하면, 변수의 값을 읽고 쓸때 CPU 캐시가 아닌 메인 메모리에서 읽어옵니다.
