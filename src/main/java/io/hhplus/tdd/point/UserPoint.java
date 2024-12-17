@@ -9,4 +9,12 @@ public record UserPoint(
     public static UserPoint empty(long id) {
         return new UserPoint(id, 0, System.currentTimeMillis());
     }
+
+    public long plusPoint(long amount) {
+        return point + amount;
+    }
+
+    public long minusPoint(long amount) {
+        return point - amount;
+    }
 }

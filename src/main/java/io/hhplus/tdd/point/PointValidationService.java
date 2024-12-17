@@ -23,7 +23,7 @@ public class PointValidationService {
             throw new IllegalArgumentException("한번에 충전 가능한 금액을 초과했습니다.");
         }
         UserPoint userPoint = userPointTable.selectById(userId);
-        long amountToSave = userPoint.point() + amount;
+        long amountToSave = userPoint.plusPoint(amount);
         if (amountToSave > USER_MAX_POINT) {
             throw new IllegalArgumentException("최대 잔고를 초과하여 충전할 수 없습니다.");
         }
@@ -34,7 +34,7 @@ public class PointValidationService {
             throw new IllegalArgumentException("0 이하의 금액을 사용할 수 없습니다.");
         }
         UserPoint userPoint = userPointTable.selectById(userId);
-        long amountToSave = userPoint.point() - amount;
+        long amountToSave = userPoint.minusPoint(amount);
         if (amountToSave < 0) {
             throw new IllegalArgumentException("잔액이 부족합니다.");
         }

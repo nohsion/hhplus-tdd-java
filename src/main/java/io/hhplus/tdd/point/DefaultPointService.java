@@ -43,7 +43,7 @@ public class DefaultPointService implements PointService {
         pointValidationService.validateCharge(userId, amount);
 
         UserPoint userPoint = userPointTable.selectById(userId);
-        long amountToSave = userPoint.point() + amount;
+        long amountToSave = userPoint.plusPoint(amount);
 
         UserPoint savedUserPoint = userPointTable.insertOrUpdate(userId, amountToSave);
         pointHistoryTable.insert(userId, amount, TransactionType.CHARGE, System.currentTimeMillis());
@@ -61,7 +61,7 @@ public class DefaultPointService implements PointService {
         pointValidationService.validateUse(userId, amount);
 
         UserPoint userPoint = userPointTable.selectById(userId);
-        long amountToSave = userPoint.point() - amount;
+        long amountToSave = userPoint.minusPoint(amount);
 
         UserPoint savedUserPoint = userPointTable.insertOrUpdate(userId, amountToSave);
         pointHistoryTable.insert(userId, amount, TransactionType.USE, System.currentTimeMillis());
