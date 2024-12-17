@@ -2,6 +2,7 @@ package io.hhplus.tdd.point;
 
 import io.hhplus.tdd.database.PointHistoryTable;
 import io.hhplus.tdd.database.UserPointTable;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
@@ -22,8 +23,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 class PointServiceConcurrencyTest {
 
     private static final Logger log = LoggerFactory.getLogger(PointServiceConcurrencyTest.class);
-    private static final ExecutorService executorService = Executors.newFixedThreadPool(30);
     private static final int THREAD_COUNT = 10;
+    private static final long USER_ID_1L = 1L;
+    private static final long USER_ID_2L = 2L;
 
     @Autowired
     private PointService pointService;
@@ -34,11 +36,19 @@ class PointServiceConcurrencyTest {
     @Autowired
     private PointHistoryTable pointHistoryTable;
 
+    @BeforeEach
+    void setUp() {
+        userPointTable.insertOrUpdate(USER_ID_1L, 0L);
+        userPointTable.insertOrUpdate(USER_ID_2L, 0L);
+    }
+
     @DisplayName("동시에 10명이 포인트 충전을 요청해도 모두 순서대로 처리된다.")
     @Test
     void chargeConcurrently() throws InterruptedException {
-        long userId = 1;
+        long userId = USER_ID_1L;
         long amount = 100;
+
+        ExecutorService executorService = Executors.newFixedThreadPool(30);
         CountDownLatch latch = new CountDownLatch(THREAD_COUNT);
 
         for (int i = 0; i < THREAD_COUNT; i++) {
@@ -75,8 +85,10 @@ class PointServiceConcurrencyTest {
     @DisplayName("동시에 10명이 포인트 사용을 요청해도 모두 순서대로 처리된다.")
     @Test
     void useConcurrently() throws InterruptedException {
-        long userId = 1;
+        long userId = USER_ID_2L;
         long amount = 100;
+
+        ExecutorService executorService = Executors.newFixedThreadPool(30);
         CountDownLatch latch = new CountDownLatch(THREAD_COUNT);
 
         pointService.charge(userId, 1000); // 1000원 충전시켜 놓음.
