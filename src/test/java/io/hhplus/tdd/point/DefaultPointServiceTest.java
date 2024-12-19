@@ -20,14 +20,11 @@ class DefaultPointServiceTest {
 
     private PointHistoryTable pointHistoryTable;
 
-    private PointValidationService pointValidationService;
-
     @BeforeEach
     void setUp() {
         userPointTable = mock(UserPointTable.class);
         pointHistoryTable = mock(PointHistoryTable.class);
-        pointValidationService = new PointValidationService(userPointTable);
-        sut = new DefaultPointService(userPointTable, pointHistoryTable, pointValidationService);
+        sut = new DefaultPointService(userPointTable, pointHistoryTable);
     }
 
     @Test
