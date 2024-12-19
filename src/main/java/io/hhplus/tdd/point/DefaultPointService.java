@@ -49,7 +49,7 @@ public class DefaultPointService implements PointService {
     public UserPoint charge(long userId, long amount) {
         UserPoint savedUserPoint;
         log.info("charge Lock 요청... userId={}, amount={}", userId, amount);
-        Lock lock = lockByUserId.computeIfAbsent(userId, k -> new ReentrantLock());
+        Lock lock = lockByUserId.computeIfAbsent(userId, k -> new ReentrantLock(true));
         lock.lock();
         log.info("charge Lock 획득! userId={}, amount={}", userId, amount);
         try {
@@ -77,7 +77,7 @@ public class DefaultPointService implements PointService {
     public UserPoint use(long userId, long amount) {
         UserPoint savedUserPoint;
         log.info("use Lock 요청... userId={}, amount={}", userId, amount);
-        Lock lock = lockByUserId.computeIfAbsent(userId, k -> new ReentrantLock());
+        Lock lock = lockByUserId.computeIfAbsent(userId, k -> new ReentrantLock(true));
         lock.lock();
         log.info("use Lock 획득! userId={}, amount={}", userId, amount);
         try {
