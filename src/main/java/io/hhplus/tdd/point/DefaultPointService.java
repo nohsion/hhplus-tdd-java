@@ -7,6 +7,8 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
@@ -15,7 +17,7 @@ public class DefaultPointService implements PointService {
 
     private static final Logger log = LoggerFactory.getLogger(DefaultPointService.class);
 
-    private final Lock lock = new ReentrantLock();
+    private final Map<Long, Lock> lockByUserId = new ConcurrentHashMap<>();
 
     private final UserPointTable userPointTable;
     private final PointHistoryTable pointHistoryTable;
@@ -47,6 +49,7 @@ public class DefaultPointService implements PointService {
     public UserPoint charge(long userId, long amount) {
         UserPoint savedUserPoint;
         log.info("Lock 요청... userId={}, amount={}", userId, amount);
+        Lock lock = lockByUserId.computeIfAbsent(userId, k -> new ReentrantLock());
         lock.lock();
         log.info("Lock 획득! userId={}, amount={}", userId, amount);
         try {
@@ -73,7 +76,10 @@ public class DefaultPointService implements PointService {
     @Override
     public UserPoint use(long userId, long amount) {
         UserPoint savedUserPoint;
+        log.info("Lock 요청... userId={}, amount={}", userId, amount);
+        Lock lock = lockByUserId.computeIfAbsent(userId, k -> new ReentrantLock());
         lock.lock();
+        log.info("Lock 획득! userId={}, amount={}", userId, amount);
         try {
             UserPoint userPoint = userPointTable.selectById(userId);
             long amountToSave = userPoint.minusPoint(amount);
@@ -81,6 +87,7 @@ public class DefaultPointService implements PointService {
             savedUserPoint = userPointTable.insertOrUpdate(userId, amountToSave);
             pointHistoryTable.insert(userId, amount, TransactionType.USE, System.currentTimeMillis());
         } finally {
+            log.info("Lock 해제! userId={}, amount={}", userId, amount);
             lock.unlock();
         }
 

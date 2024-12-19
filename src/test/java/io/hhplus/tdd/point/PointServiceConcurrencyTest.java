@@ -45,9 +45,9 @@ class PointServiceConcurrencyTest {
                 .toList();
     }
 
-    @DisplayName("동시에 10명이 포인트 충전을 요청해도 모두 순서대로 처리되어야 한다.")
+    @DisplayName("동시에 userId1에 포인트 충전을 요청하면 요청 순서대로 처리되어야 한다.")
     @Test
-    void chargeConcurrently() throws InterruptedException {
+    void chargeConcurrently_userId1() throws InterruptedException {
         long userId = USER_ID_1L;
         long totalAmount = amounts.stream().mapToLong(Long::longValue).sum();
 
@@ -85,9 +85,9 @@ class PointServiceConcurrencyTest {
                 .containsExactlyElementsOf(amounts);
     }
 
-    @DisplayName("동시에 10명이 포인트 사용을 요청해도 모두 순서대로 처리된다.")
+    @DisplayName("동시에 userId2에 포인트 사용을 요청하면 요청 순서대로 처리되어야 한다.")
     @Test
-    void useConcurrently() throws InterruptedException {
+    void useConcurrently_userId2() throws InterruptedException {
         long userId = USER_ID_2L;
         long totalAmount = amounts.stream().mapToLong(Long::longValue).sum();
 
@@ -126,5 +126,38 @@ class PointServiceConcurrencyTest {
         assertThat(historyAmounts)
                 .as("사용 내역은 순서대로 처리되어야 한다.")
                 .containsExactlyElementsOf(amounts);
+    }
+
+    @DisplayName("동시에 1000명이 각각 자신의 포인트를 충전하면 본인만의 Lock을 갖기 때문에 별도 대기 없이 처리되어야 한다.")
+    @Test
+    void chargeConcurrentlyOnlyMyPoint_1000Users() throws InterruptedException {
+        int threadCount = 100;
+        long amount = 100L;
+        List<Long> userIds = LongStream.range(10001L, threadCount + 10001L)
+                .boxed()
+                .toList();
+
+        ExecutorService executorService = Executors.newFixedThreadPool(threadCount);
+        CountDownLatch latch = new CountDownLatch(threadCount);
+
+        for (int i = 0; i < threadCount; i++) {
+            long userId = userIds.get(i);
+            executorService.submit(() -> {
+                try {
+                    pointService.charge(userId, amount);
+                } finally {
+                    latch.countDown();
+                }
+            });
+        }
+        latch.await();
+        executorService.shutdown();
+
+        for (long userId : userIds) {
+            UserPoint userPoint = userPointTable.selectById(userId);
+            assertThat(userPoint.point())
+                    .as("모든 유저는 100 포인트 이어야 한다.", userId, amount)
+                    .isEqualTo(amount);
+        }
     }
 }
