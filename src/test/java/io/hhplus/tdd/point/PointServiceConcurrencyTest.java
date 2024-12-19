@@ -20,7 +20,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 @SpringBootTest
 class PointServiceConcurrencyTest {
 
-    private static final int THREAD_COUNT = 10;
+    private static final int THREAD_COUNT = 10000;
     private static final long USER_ID_1L = 1L;
     private static final long USER_ID_2L = 2L;
 
@@ -55,7 +55,9 @@ class PointServiceConcurrencyTest {
         CountDownLatch latch = new CountDownLatch(THREAD_COUNT);
 
         for (int i = 0; i < THREAD_COUNT; i++) {
-            Thread.sleep(5); // 순서대로 처리되도록 간격을 둔다.
+            // 순서대로 처리되도록 간격을 둔다. (executorService.submit()이 for문 순서대로 처리되지 않음)
+            // charge() 메소드가 대략 500ms delay가 걸리므로 5ms 정도면 동시 요청이면서 원하는 순서를 지정할 수 있음.
+            Thread.sleep(5);
             long amount = amounts.get(i);
             executorService.submit(() -> {
                 try {
@@ -167,7 +169,7 @@ class PointServiceConcurrencyTest {
 
     }
 
-    @DisplayName("동시에 1000명이 각각 자신의 포인트를 충전하면 본인만의 Lock을 갖기 때문에 별도 대기 없이 처리되어야 한다.")
+    @DisplayName("동시에 100명이 각각 자신의 포인트를 충전하면 본인만의 Lock을 갖기 때문에 별도 대기 없이 처리되어야 한다.")
     @Test
     void chargeConcurrentlyOnlyMyPoint_1000Users() throws InterruptedException {
         int threadCount = 100;
@@ -198,5 +200,32 @@ class PointServiceConcurrencyTest {
                     .as("모든 유저는 100 포인트 이어야 한다.", userId, amount)
                     .isEqualTo(amount);
         }
+    }
+
+    @DisplayName("동시에 userId1에 포인트 충전을 100원씩 10번 요청하면 총 1000원이 저장되어야 한다.")
+    @Test
+    void chargeConcurrently_userId1L() throws InterruptedException {
+        long userId = 1L;
+        long amount = 100L;
+
+        ExecutorService executorService = Executors.newFixedThreadPool(THREAD_COUNT);
+        CountDownLatch latch = new CountDownLatch(THREAD_COUNT);
+
+        for (int i = 0; i < THREAD_COUNT; i++) {
+            executorService.submit(() -> {
+                try {
+                    pointService.charge(userId, amount);
+                } finally {
+                    latch.countDown();
+                }
+            });
+        }
+        latch.await();
+        executorService.shutdown();
+
+        // 동시성 테스트 (순서와 상관없이 처리)
+        UserPoint userPoint = userPointTable.selectById(userId);
+        assertThat(userPoint.point())
+                .isEqualTo(1000L);
     }
 }
