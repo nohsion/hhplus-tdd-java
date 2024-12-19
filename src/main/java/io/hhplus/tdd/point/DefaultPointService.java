@@ -2,6 +2,8 @@ package io.hhplus.tdd.point;
 
 import io.hhplus.tdd.database.PointHistoryTable;
 import io.hhplus.tdd.database.UserPointTable;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -10,6 +12,8 @@ import java.util.concurrent.locks.ReentrantLock;
 
 @Service
 public class DefaultPointService implements PointService {
+
+    private static final Logger log = LoggerFactory.getLogger(DefaultPointService.class);
 
     private final Lock lock = new ReentrantLock();
 
@@ -42,7 +46,9 @@ public class DefaultPointService implements PointService {
      */
     public UserPoint charge(long userId, long amount) {
         UserPoint savedUserPoint;
+        log.info("Lock 요청... userId={}, amount={}", userId, amount);
         lock.lock();
+        log.info("Lock 획득! userId={}, amount={}", userId, amount);
         try {
             // 주의: 조회를 하는 부분까지 Lock을 걸어야 한다.
             // 충전에만 Lock을 걸면 +100을 두 번해도 결과가 +100이 되는 문제가 발생할 수 있다. 조회시점의 데이터가 동일하기 때문이다.
@@ -52,6 +58,7 @@ public class DefaultPointService implements PointService {
             savedUserPoint = userPointTable.insertOrUpdate(userId, amountToSave);
             pointHistoryTable.insert(userId, amount, TransactionType.CHARGE, System.currentTimeMillis());
         } finally {
+            log.info("Lock 해제! userId={}, amount={}", userId, amount);
             lock.unlock();
         }
 
