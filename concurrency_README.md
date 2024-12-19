@@ -96,6 +96,252 @@ Compare And Swap의 약자로, 기존 값과 변경할 값을 compare해서 같�
 
 => 따라서, ReentrantLock(AQS)는 CAS 연산을 통해 원자성을 보장하고, volatile 키워드를 통해 가시성을 보장합니다.
 
+## 3. 프로젝트 적용
+
+### TDD 테스트 세팅
+
+1. 동시에 포인트 충전을 요청하면, 요청 순서대로 처리되어야 한다.
+2. 동시에 포인트 사용을 요청하면, 요청 순서대로 처리되어야 한다.
+3. 동시에 동일한 포인트 충전과 사용을 번갈아 요청하면, 요청 순서대로 처리되어 잔여 포인트가 0이어야 한다.
+4. 다른 사용자들이 동시에 포인트 충전(사용)을 요청하면, 동시성과 상관없이 처리되어야 한다. (불필요한 대기가 없어야 한다.)
+
+#### 동시성 테스트
+
+"동시에 10개의 스레드가 100원씩 포인트 충전을 요청하면 총 1,000 포인트가 되어야 한다."
+
+그러면, 멀티 스레드를 이용해서 UserPoint의 amount 결과가 총 1000이 나오는지 확인하면 됩니다.
+
+```java
+@DisplayName("동시에 userId1에 포인트 충전을 100원씩 10번 요청하면 총 1000원이 저장되어야 한다.")
+@Test
+void chargeConcurrently_userId1L() throws InterruptedException {
+  long userId = 1L;
+  long amount = 100L;
+
+  ExecutorService executorService = Executors.newFixedThreadPool(THREAD_COUNT);
+  CountDownLatch latch = new CountDownLatch(THREAD_COUNT);
+
+  for (int i = 0; i < THREAD_COUNT; i++) {
+    executorService.submit(() -> {
+      try {
+        pointService.charge(userId, amount);
+      } finally {
+        latch.countDown();
+      }
+    });
+  }
+  latch.await();
+  executorService.shutdown();
+
+  // 동시성 테스트 (순서와 상관없이 처리)
+  UserPoint userPoint = userPointTable.selectById(userId);
+  assertThat(userPoint.point())
+          .isEqualTo(1000L);
+}
+```
+
+#### 순서 보장 테스트
+
+"동시에 10개의 스레드가 충전을 요청하면, 요청 순서대로 처리되어야 하는데.. 순서를 어떻게 테스트하지?"
+
+동시성 테스트는 순서와 상관없이 충전 결과만 보장하면 되기 때문에, 꽤 간단했는데.. 순서가 들어가니 어떻게 테스트할 지 막막했습니다.
+테스트를 어떻게 할 지도 막막했고, 동시성을 보장하면서 순서를 어떻게 보장해야 할 지도 막막했습니다..
+
+우선, history 내역을 저장하니까 요청 순서를 테스트하는 건 history를 통해 확인할 수 있다고 생각했습니다.
+따라서, 포인트 충전 amount를 매번 다르게 요청을 하고, history를 통해 순서를 확인하도록 테스트를 짰습니다.
+(사실 테스트를 모두 다 짜고, 코드를 짰다기 보다 확신이 없으니 번갈아 가면서 진행했습니다.)
+
+1주차 허재 코치님 Q&A 세션을 들으면서 ReentrantLock을 잘 파보면 순서도 지정할 수 있다는 힌트를 얻었습니다. (힌트가 없었다면.. 😇)
+
+동시성 테스트와 순서 보장 테스트 하나씩만 보고서에 작성하겠습니다. 나머지는 코드로 확인 해주세요. 
+
+```java
+@DisplayName("동시에 userId1에 포인트 충전을 요청하면 요청 순서대로 처리되어야 한다.")
+@Test
+void chargeConcurrently_userId1() throws InterruptedException {
+  long userId = USER_ID_1L;
+  long totalAmount = amounts.stream().mapToLong(Long::longValue).sum();
+
+  ExecutorService executorService = Executors.newFixedThreadPool(THREAD_COUNT);
+  CountDownLatch latch = new CountDownLatch(THREAD_COUNT);
+
+  for (int i = 0; i < THREAD_COUNT; i++) {
+    // 순서대로 처리되도록 간격을 둔다. (executorService.submit()이 반드시 for문 순서대로 처리된다는 보장이 없음)
+    // charge() 메소드가 대략 500ms delay가 걸리므로 5ms 정도면 동시 요청이면서 원하는 순서를 지정할 수 있음.
+    Thread.sleep(5);
+    long amount = amounts.get(i);
+    executorService.submit(() -> {
+      try {
+        pointService.charge(userId, amount);
+      } finally {
+        latch.countDown();
+      }
+    });
+  }
+  latch.await();
+  executorService.shutdown();
+
+  // 동시성 테스트 (순서와 상관없이 처리)
+  UserPoint userPoint = userPointTable.selectById(userId);
+  assertThat(userPoint.point())
+          .as("동시에 10명이 충전해도 결과 총 금액은 모두 더해져야 한다.")
+          .isEqualTo(totalAmount);
+
+  // 동시성 테스트 (순서대로 처리)
+  List<PointHistory> pointHistoryList = pointHistoryTable.selectAllByUserId(userId);
+  assertThat(pointHistoryList).hasSize(THREAD_COUNT);
+  List<Long> historyAmounts = pointHistoryList.stream()
+          .map(PointHistory::amount)
+          .toList();
+  assertThat(historyAmounts)
+          .as("사용 내역은 순서대로 처리되어야 한다.")
+          .containsExactlyElementsOf(amounts);
+}
+```
+
+### 0. 동시성 적용 전
+
+```java
+public UserPoint charge(long userId, long amount) {
+    UserPoint userPoint = userPointTable.selectById(userId);
+    long amountToSave = userPoint.plusPoint(amount);
+
+    UserPoint savedUserPoint = userPointTable.insertOrUpdate(userId, amountToSave);
+    pointHistoryTable.insert(userId, amount, TransactionType.CHARGE, System.currentTimeMillis());
+
+    return savedUserPoint;
+}
+```
+
+테스트 결과
+- 동시성 테스트: 실패
+  - ![img_1.png](assets/img_12.png)
+- 순서 보장 테스트: 실패
+  - ![img_2.png](assets/img_13.png)
+
+### 1. synchronized
+
+동시성 제어 방식 중 가장 간단하게 적용 가능한 방법이라서 사실 동시성 제어 공부 없이 바로 적용하였습니다.
+
+```java
+public synchronized UserPoint charge(long userId, long amount) {
+    UserPoint userPoint = userPointTable.selectById(userId);
+    long amountToSave = userPoint.plusPoint(amount);
+
+    UserPoint savedUserPoint = userPointTable.insertOrUpdate(userId, amountToSave);
+    pointHistoryTable.insert(userId, amount, TransactionType.CHARGE, System.currentTimeMillis());
+
+    return savedUserPoint;
+}
+```
+
+테스트 결과
+![img_3.png](assets/img_3.png)
+- 동시성 테스트: 성공
+- 순서 보장 테스트: 실패
+  - [10, 20, ...] 순서대로 요청했으나, [10, 100, ...] 으로 히스토리가 저장되어 실패
+  - ![img_4.png](assets/img_4.png)
+
+
+### 2. ReentrantLock
+
+```java
+@Service
+public class DefaultPointService implements PointService {
+
+    private final Lock lock = new ReentrantLock();
+
+    //.. 중략
+  
+    public UserPoint charge(long userId, long amount) {
+        UserPoint savedUserPoint;
+        log.info("charge Lock 요청... userId={}, amount={}", userId, amount);
+        lock.lock();
+        log.info("charge Lock 획득! userId={}, amount={}", userId, amount);
+        try {
+            // 주의: 조회를 하는 부분까지 Lock을 걸어야 한다.
+            // 충전에만 Lock을 걸면 +100을 두 번해도 결과가 +100이 되는 문제가 발생할 수 있다. 조회시점의 데이터가 동일하기 때문이다.
+            UserPoint userPoint = userPointTable.selectById(userId);
+            long amountToSave = userPoint.plusPoint(amount);
+
+            savedUserPoint = userPointTable.insertOrUpdate(userId, amountToSave);
+            pointHistoryTable.insert(userId, amount, TransactionType.CHARGE, System.currentTimeMillis());
+        } finally {
+            log.info("charge Lock 해제! userId={}, amount={}", userId, amount);
+            lock.unlock();
+        }
+
+        return savedUserPoint;
+    }
+}
+```
+
+테스트 결과
+- 동시성 테스트: 성공
+- 순서 보장 테스트: 성공
+![img_5.png](assets/img_5.png)
+
+드디어 모두 성공했습니다... 가 아니고, 적절한 순서 보장 테스트가 아니어서 통과하였습니다.
+분명 공부한 내용으로는 ReentrantLock의 fairness를 통해 요청 순서대로 처리가 되어야 하는데, 테스트는 계속 통과하니 뭔가 이상하다고 생각했습니다.
+사실 이때 많이 막혀서 ReentrantLock에 대해 조금 더 공부하게 되었습니다. 😅
+
+"스레드 A가 lock을 획득하고 있고, 스레드 B가 lock을 요청했다면, B는 대기 상태로 들어간다. A가 lock을 해제하는 순간에 스레드 C가 lock을 요청하면, C는 B가 깨어나기도 전에 lock을 얻을 수 있다."
+
+예시를 잘 살펴보면, lock을 해제하는 딱 그!! 시점에 새로운 스레드가 lock 요청을 해야 합니다.
+그래서 이건 테스트 코드로 짜진 못하고, 아래와 같이 로그를 통해 테스트해봤습니다.
+
+"기존 스레드 수를 1000개로 늘려서 모두 5ms 간격으로 충전을 요청하면 lock을 해제하는 시점에 새로운 스레드가 lock을 요청하지 않을까?" 라는 가설을 세워, 테스트를 진행해봤습니다.
+amounts = [10, 20, ...] 순서대로 요청을 했습니다.
+
+즉, amount=10의 Lock 해제가 끝나면 amount=20이 Lock을 획득해야 하는데, 지금은 amount=350이 중간에 Lock을 가로채갑니다.
+![img_6.png](assets/img_6.png)
+원하는 실패하는 테스트를 확인했으나... 1000개의 스레드를 매번 테스트를 돌리는 게 너무 느려서 커밋하지는 않았습니다. (이러한 테스트는 실무에서 어떻게 처리하나요? 🤔)
+
+### 2-1. ReentrantLock(fairness=true)
+
+```java
+private final Lock lock = new ReentrantLock(true);
+```
+
+fairness 옵션을 주면, 아래와 같이 Lock 요청 순서대로 처리됩니다.
+
+![img_7.png](assets/img_7.png)
+
+### 2-2. ReentrantLock + ConcurrentHashMap
+
+정책 중, "HashMap의 key인 userId 별로 독립적으로 동시성 처리를 진행한다." 라는 도전과제가 있었습니다.
+이건, userId별로 별도의 Lock을 관리해야 하므로 Map을 사용했는데요.
+동시성 제어를 위해 ConcurrentHashMap을 사용하여 처리했습니다.
+
+```java
+@Service
+public class DefaultPointService implements PointService {
+
+    private final Map<Long, Lock> lockByUserId = new ConcurrentHashMap<>();
+
+    //.. 중략
+  
+    public UserPoint charge(long userId, long amount) {
+        UserPoint savedUserPoint;
+        log.info("charge Lock 요청... userId={}, amount={}", userId, amount);
+        Lock lock = lockByUserId.computeIfAbsent(userId, k -> new ReentrantLock());
+        lock.lock();
+        log.info("charge Lock 획득! userId={}, amount={}", userId, amount);
+        try {
+            UserPoint userPoint = userPointTable.selectById(userId);
+            long amountToSave = userPoint.plusPoint(amount);
+
+            savedUserPoint = userPointTable.insertOrUpdate(userId, amountToSave);
+            pointHistoryTable.insert(userId, amount, TransactionType.CHARGE, System.currentTimeMillis());
+        } finally {
+            log.info("charge Lock 해제! userId={}, amount={}", userId, amount);
+            lock.unlock();
+        }
+
+        return savedUserPoint;
+    }
+}
+```
 
 # 참고
 [ReentrantLock이 동작하는 원리(AbstractQueuedSynchronizer)](https://miiiinju.tistory.com/27)
